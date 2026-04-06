@@ -50,11 +50,25 @@ module.exports = ({ config }: { config: ExpoConfig }) =>
       "expo-router",
       "expo-sqlite",
       [
+        "expo-build-properties",
+        {
+          ios: {
+            deploymentTarget: "16.0",
+          },
+        },
+      ],
+      [
+        "./plugins/with-ios-deployment-target",
+        {
+          deploymentTarget: "16.0",
+        },
+      ],
+      [
         "react-native-widget-extension",
         {
           widgetsFolder: "widgets",
           groupIdentifier: APP_GROUP_IDENTIFIER,
-          deploymentTarget: "15.1",
+          deploymentTarget: "16.0",
         },
       ],
     ],
