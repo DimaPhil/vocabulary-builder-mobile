@@ -16,7 +16,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --runInBand",
     "doctor": "expo doctor",
-    "prebuild:ios": "expo prebuild --platform ios --non-interactive",
+    "prebuild:ios": "CI=1 expo prebuild --platform ios",
     "ci:check": "npm run lint && npm run typecheck && npm run test:coverage",
     "prepare": "husky"
   },
@@ -78,5 +78,6 @@
     "*.{json,md,yml,yaml}": [
       "prettier --write"
     ]
-  }
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
 }
