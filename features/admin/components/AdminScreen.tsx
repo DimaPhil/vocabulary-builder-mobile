@@ -16,6 +16,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Page } from "@/components/ui/Page";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -29,7 +30,11 @@ import {
   appSettingsSchema,
 } from "@/lib/db/schemas";
 import type { Category, VocabularyItem } from "@/lib/types";
-import { copyImageToAppStorage, validateRemoteImageUrl } from "@/lib/images/service";
+import {
+  copyImageToAppStorage,
+  resolveAutoImageUrl,
+  validateRemoteImageUrl,
+} from "@/lib/images/service";
 import { useAppTheme } from "@/lib/theme";
 import {
   commitImportPayload,
@@ -99,7 +104,9 @@ export function AdminScreen() {
   const [itemSearch, setItemSearch] = useState("");
   const [importText, setImportText] = useState("");
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [autoFillImportImages, setAutoFillImportImages] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [resolvingItemImage, setResolvingItemImage] = useState(false);
   const deferredItemSearch = useDeferredValue(itemSearch);
 
   const categoryForm = useForm<CategoryFormValues>({
@@ -195,6 +202,27 @@ export function AdminScreen() {
       };
     }
 
+    if (image.kind === "none") {
+      const selectedCategory = categories.find(
+        (category) => category.id === values.categoryId
+      );
+      const resolvedImageUrl = await resolveAutoImageUrl({
+        sourceText: values.sourceText,
+        targetText: values.targetText,
+        sourceLanguage: values.sourceLanguage,
+        targetLanguage: values.targetLanguage,
+        categoryName: selectedCategory?.name,
+        categorySlug: selectedCategory?.slug,
+      });
+
+      if (resolvedImageUrl) {
+        image = {
+          kind: "remote",
+          uri: resolvedImageUrl,
+        };
+      }
+    }
+
     const input = vocabularyItemSchema.parse({
       categoryId: values.categoryId,
       sourceText: values.sourceText,
@@ -257,8 +285,43 @@ export function AdminScreen() {
   }
 
   async function handlePreviewImport() {
-    const preview = await previewImportPayload(importText);
+    const preview = await previewImportPayload(importText, {
+      autoFillMissingImages: autoFillImportImages,
+    });
     setImportPreview(preview);
+  }
+
+  async function handleAutoResolveItemImage() {
+    const values = itemForm.getValues();
+    const selectedCategory = categories.find(
+      (category) => category.id === values.categoryId
+    );
+
+    setResolvingItemImage(true);
+
+    try {
+      const resolvedImageUrl = await resolveAutoImageUrl({
+        sourceText: values.sourceText,
+        targetText: values.targetText,
+        sourceLanguage: values.sourceLanguage,
+        targetLanguage: values.targetLanguage,
+        categoryName: selectedCategory?.name,
+        categorySlug: selectedCategory?.slug,
+      });
+
+      if (!resolvedImageUrl) {
+        Alert.alert(
+          "No image found",
+          "Try saving without an image, entering a custom URL, or choosing a local image."
+        );
+        return;
+      }
+
+      itemForm.setValue("imageMode", "remote");
+      itemForm.setValue("imageUri", resolvedImageUrl);
+    } finally {
+      setResolvingItemImage(false);
+    }
   }
 
   async function handleCommitImport() {
@@ -596,6 +659,14 @@ export function AdminScreen() {
           style={{ minHeight: 180, textAlignVertical: "top" }}
           value={importText}
         />
+        <Checkbox
+          checked={autoFillImportImages}
+          label="Auto-fill missing images from Wikimedia"
+          onPress={() => {
+            setAutoFillImportImages((value) => !value);
+            setImportPreview(null);
+          }}
+        />
         <View style={{ flexDirection: "row", gap: 10 }}>
           <View style={{ flex: 1 }}>
             <Button label="Load JSON file" onPress={handleLoadImportFile} variant="secondary" />
@@ -624,6 +695,11 @@ export function AdminScreen() {
                   {importPreview.payload?.categories.length ?? 0} categories and{" "}
                   {importPreview.payload?.items.length ?? 0} items will be appended.
                 </Text>
+                {importPreview.autoFilledImages ? (
+                  <Text color={theme.colors.textMuted}>
+                    {importPreview.autoFilledImages} missing image(s) were auto-filled.
+                  </Text>
+                ) : null}
                 <Button
                   disabled={importing}
                   label={importing ? "Importing..." : "Commit import"}
@@ -761,6 +837,12 @@ export function AdminScreen() {
                 onPress={pickLocalImage}
                 variant="secondary"
               />
+              <Button
+                disabled={resolvingItemImage}
+                label={resolvingItemImage ? "Finding image..." : "Auto-find image"}
+                onPress={handleAutoResolveItemImage}
+                variant="secondary"
+              />
             </View>
             <Controller
               control={itemForm.control}
@@ -768,7 +850,7 @@ export function AdminScreen() {
               render={({ field }) => (
                 <TextField
                   autoCapitalize="none"
-                  helperText="Remote image URLs must be HTTPS. Batch imports support only remote URLs."
+                  helperText="Remote image URLs must be HTTPS. If left empty, the app will try to auto-find one when possible."
                   label="Remote image URL"
                   onChangeText={(value) => {
                     itemForm.setValue("imageMode", value ? "remote" : "none");

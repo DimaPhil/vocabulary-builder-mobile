@@ -3,12 +3,19 @@ import { commitImportPayload, previewImportPayload } from "@/features/admin/sche
 const mockCreateCategory = jest.fn();
 const mockCreateVocabularyItem = jest.fn();
 const mockGetCategories = jest.fn();
+const mockResolveAutoImageUrl = jest.fn();
 const mockSyncWidgetSnapshot = jest.fn();
+const mockValidateRemoteImageUrl = jest.fn();
 
 jest.mock("@/lib/db/repositories", () => ({
   createCategory: (...args: unknown[]) => mockCreateCategory(...args),
   createVocabularyItem: (...args: unknown[]) => mockCreateVocabularyItem(...args),
   getCategories: (...args: unknown[]) => mockGetCategories(...args),
+}));
+
+jest.mock("@/lib/images/service", () => ({
+  resolveAutoImageUrl: (...args: unknown[]) => mockResolveAutoImageUrl(...args),
+  validateRemoteImageUrl: (...args: unknown[]) => mockValidateRemoteImageUrl(...args),
 }));
 
 jest.mock("@/lib/widget/snapshot", () => ({
@@ -18,10 +25,13 @@ jest.mock("@/lib/widget/snapshot", () => ({
 describe("import preview", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockResolveAutoImageUrl.mockResolvedValue(null);
+    mockValidateRemoteImageUrl.mockImplementation(async (value: string) => value);
   });
 
   it("rejects malformed JSON", async () => {
     await expect(previewImportPayload("{")).resolves.toEqual({
+      autoFilledImages: 0,
       errors: ["Import must be valid JSON."],
       payload: null,
     });
@@ -42,13 +52,6 @@ describe("import preview", () => {
   });
 
   it("accepts a valid payload with image URLs", async () => {
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      headers: {
-        get: () => "image/png",
-      },
-    }) as unknown as typeof fetch;
-
     const preview = await previewImportPayload(
       JSON.stringify({
         categories: [{ slug: "kitchen", name: "Kitchen" }],
@@ -65,8 +68,66 @@ describe("import preview", () => {
       })
     );
 
+    expect(preview.autoFilledImages).toBe(0);
     expect(preview.errors).toEqual([]);
     expect(preview.payload?.items).toHaveLength(1);
+  });
+
+  it("auto-fills missing image URLs during preview", async () => {
+    mockResolveAutoImageUrl.mockResolvedValueOnce("https://images.example.com/whisk.png");
+
+    const preview = await previewImportPayload(
+      JSON.stringify({
+        categories: [{ slug: "kitchen", name: "Kitchen" }],
+        items: [
+          {
+            category: "kitchen",
+            sourceText: "whisk",
+            targetText: "венчик",
+            sourceLanguage: "en",
+            targetLanguage: "ru",
+          },
+        ],
+      })
+    );
+
+    expect(mockResolveAutoImageUrl).toHaveBeenCalledWith({
+      categoryName: "Kitchen",
+      categorySlug: "kitchen",
+      sourceLanguage: "en",
+      sourceText: "whisk",
+      targetLanguage: "ru",
+      targetText: "венчик",
+    });
+    expect(preview.autoFilledImages).toBe(1);
+    expect(preview.errors).toEqual([]);
+    expect(preview.payload?.items[0].imageUrl).toBe("https://images.example.com/whisk.png");
+    expect(mockValidateRemoteImageUrl).not.toHaveBeenCalled();
+  });
+
+  it("skips auto-fill when the option is disabled", async () => {
+    const preview = await previewImportPayload(
+      JSON.stringify({
+        categories: [{ slug: "kitchen", name: "Kitchen" }],
+        items: [
+          {
+            category: "kitchen",
+            sourceText: "whisk",
+            targetText: "венчик",
+            sourceLanguage: "en",
+            targetLanguage: "ru",
+          },
+        ],
+      }),
+      {
+        autoFillMissingImages: false,
+      }
+    );
+
+    expect(mockResolveAutoImageUrl).not.toHaveBeenCalled();
+    expect(preview.autoFilledImages).toBe(0);
+    expect(preview.errors).toEqual([]);
+    expect(preview.payload?.items[0].imageUrl).toBeUndefined();
   });
 
   it("commits imported categories and items", async () => {

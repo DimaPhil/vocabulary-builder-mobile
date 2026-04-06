@@ -28,13 +28,32 @@ export function PracticeSessionScreen() {
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
 
+  function leaveSession(destination: "/" | "/practice") {
+    setSession(null);
+    router.replace(destination);
+  }
+
   if (!session || session.cards.length === 0) {
     return (
       <Page contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
-        <EmptyState
-          title="No active session"
-          description="Go back to Practice and start a new shuffled session."
-        />
+        <View style={{ gap: 18 }}>
+          <EmptyState
+            title="No active session"
+            description="Go back to Practice and start a new shuffled session."
+          />
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label="Practice"
+                variant="secondary"
+                onPress={() => leaveSession("/practice")}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button label="Home" onPress={() => leaveSession("/")} />
+            </View>
+          </View>
+        </View>
       </Page>
     );
   }
@@ -44,6 +63,19 @@ export function PracticeSessionScreen() {
 
   return (
     <Page>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Button
+            label="Back to practice"
+            variant="secondary"
+            onPress={() => leaveSession("/practice")}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button label="Home" variant="ghost" onPress={() => leaveSession("/")} />
+        </View>
+      </View>
+
       <View style={{ gap: 10 }}>
         <Text variant="label">
           Card {index + 1} of {session.cards.length}
@@ -113,7 +145,7 @@ export function PracticeSessionScreen() {
             }
 
             if (isFinished) {
-              router.back();
+              leaveSession("/practice");
               return;
             }
 
@@ -132,6 +164,11 @@ export function PracticeSessionScreen() {
             setIndex(0);
             setRevealed(false);
           }}
+        />
+        <Button
+          label="End session"
+          variant="ghost"
+          onPress={() => leaveSession("/practice")}
         />
       </View>
     </Page>
