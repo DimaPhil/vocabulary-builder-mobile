@@ -3,6 +3,9 @@ import WidgetKit
 
 private let appGroupIdentifier = "group.com.dmitryfilippov.vocabularybuildermobile.shared"
 private let snapshotFileName = "widget-snapshot.json"
+private let appLaunchURL = URL(string: "vocabularybuilder://widget")!
+private let widgetTextPrimary = Color(red: 0.12, green: 0.10, blue: 0.08)
+private let widgetTextSecondary = Color(red: 0.34, green: 0.27, blue: 0.19)
 
 struct VocabularySnapshot: Decodable {
   let version: Int
@@ -113,55 +116,192 @@ struct VocabularyWordWidget: Widget {
   var body: some WidgetConfiguration {
     StaticConfiguration(kind: kind, provider: VocabularyProvider()) { entry in
       VocabularyWordWidgetView(entry: entry)
+        .widgetURL(appLaunchURL)
+        .widgetContainerBackground {
+          VocabularyWidgetBackground()
+        }
     }
     .configurationDisplayName("Vocabulary Rotation")
     .description("Shows a rotating word from your personal vocabulary database.")
-    .supportedFamilies([.systemSmall, .systemMedium])
+    .supportedFamilies([
+      .systemSmall,
+      .systemMedium,
+      .accessoryInline,
+      .accessoryCircular,
+      .accessoryRectangular,
+    ])
   }
 }
 
 struct VocabularyWordWidgetView: View {
+  @Environment(\.widgetFamily) private var family
   let entry: VocabularyProvider.Entry
 
+  var body: some View {
+    content
+  }
+
+  @ViewBuilder
+  private var content: some View {
+    switch family {
+    case .accessoryInline:
+      inlineAccessoryContent
+    case .accessoryCircular:
+      circularAccessoryContent
+    case .accessoryRectangular:
+      rectangularAccessoryContent
+    default:
+      homeScreenContent
+    }
+  }
+
+  private var homeScreenContent: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      Text("Vocabulary")
+        .font(.system(size: 17, weight: .semibold, design: .rounded))
+        .foregroundStyle(widgetTextPrimary)
+
+      Spacer(minLength: 12)
+
+      if let item = entry.item {
+        VStack(alignment: .leading, spacing: 6) {
+          Text(item.sourceText)
+            .font(.system(size: 22, weight: .bold, design: .rounded))
+            .foregroundStyle(widgetTextPrimary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+          Text(item.targetText)
+            .font(.system(size: 18, weight: .semibold, design: .rounded))
+            .foregroundStyle(widgetTextSecondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+      } else {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("No words yet")
+            .font(.system(size: 20, weight: .bold, design: .rounded))
+            .foregroundStyle(widgetTextPrimary)
+          Text("Add your first vocabulary item in the app.")
+            .font(.system(size: 14, weight: .medium, design: .rounded))
+            .foregroundStyle(widgetTextSecondary)
+        }
+      }
+
+      Spacer()
+
+      Text("Updates every \(entry.rotationHours)h")
+        .font(.system(size: 13, weight: .medium, design: .rounded))
+        .foregroundStyle(widgetTextSecondary)
+    }
+    .padding(16)
+  }
+
+  private var inlineAccessoryContent: some View {
+    Group {
+      if let item = entry.item {
+        Text(item.sourceText)
+      } else {
+        Text("Vocabulary")
+      }
+    }
+    .font(.system(size: 13, weight: .semibold, design: .rounded))
+  }
+
+  private var circularAccessoryContent: some View {
+    ZStack {
+      AccessoryWidgetBackground()
+
+      if let item = entry.item {
+        VStack(spacing: 2) {
+          Text(shortToken(for: item.sourceText))
+            .font(.system(size: 18, weight: .bold, design: .rounded))
+            .minimumScaleFactor(0.5)
+          Text(shortToken(for: item.targetText))
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .minimumScaleFactor(0.5)
+        }
+        .padding(6)
+      } else {
+        Image(systemName: "book.closed")
+          .font(.system(size: 18, weight: .semibold))
+      }
+    }
+  }
+
+  private var rectangularAccessoryContent: some View {
+    VStack(alignment: .leading, spacing: 2) {
+      if let item = entry.item {
+        Text(item.sourceText)
+          .font(.system(size: 20, weight: .bold, design: .rounded))
+          .lineLimit(1)
+          .minimumScaleFactor(0.75)
+        Text(item.targetText)
+          .font(.system(size: 15, weight: .semibold, design: .rounded))
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+      } else {
+        Text("Vocabulary")
+          .font(.system(size: 18, weight: .bold, design: .rounded))
+        Text("Add words")
+          .font(.system(size: 13, weight: .semibold, design: .rounded))
+          .foregroundStyle(.secondary)
+      }
+    }
+    .padding(.vertical, 2)
+  }
+
+  private func shortToken(for value: String) -> String {
+    let token = value
+      .split(whereSeparator: \.isWhitespace)
+      .first
+      .map(String.init)?
+      .trimmingCharacters(in: .punctuationCharacters) ?? value
+
+    return String(token.prefix(8))
+  }
+}
+
+private struct VocabularyWidgetBackground: View {
   var body: some View {
     ZStack {
       LinearGradient(
         colors: [
-          Color(red: 0.96, green: 0.92, blue: 0.86),
-          Color(red: 0.92, green: 0.84, blue: 0.73)
+          Color(red: 0.99, green: 0.97, blue: 0.93),
+          Color(red: 0.95, green: 0.89, blue: 0.79),
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
       )
 
-      VStack(alignment: .leading, spacing: 8) {
-        Text("Vocabulary")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+      RoundedRectangle(cornerRadius: 24, style: .continuous)
+        .fill(Color.white.opacity(0.38))
+        .padding(8)
 
-        if let item = entry.item {
-          Text(item.sourceText)
-            .font(.system(size: 20, weight: .bold, design: .rounded))
-            .minimumScaleFactor(0.7)
-          Text(item.targetText)
-            .font(.system(size: 14, weight: .medium, design: .rounded))
-            .foregroundStyle(.secondary)
-            .minimumScaleFactor(0.7)
-        } else {
-          Text("No words yet")
-            .font(.system(size: 18, weight: .bold, design: .rounded))
-          Text("Add your first vocabulary item in the app.")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-        }
+      RoundedRectangle(cornerRadius: 24, style: .continuous)
+        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+        .padding(8)
+    }
+  }
+}
 
-        Spacer()
+private struct AccessoryWidgetBackground: View {
+  var body: some View {
+    Circle()
+      .fill(.tertiary)
+  }
+}
 
-        Text("Updates every \(entry.rotationHours)h")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-      }
-      .padding(16)
+private extension View {
+  @ViewBuilder
+  func widgetContainerBackground<Background: View>(
+    @ViewBuilder _ background: () -> Background
+  ) -> some View {
+    if #available(iOSApplicationExtension 17.0, *) {
+      self.containerBackground(for: .widget, content: background)
+    } else {
+      self.background(background())
     }
   }
 }

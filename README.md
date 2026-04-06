@@ -169,6 +169,8 @@ If native assets or native config change, regenerate iOS first:
 npm run prebuild:ios
 ```
 
+This command recreates the generated `ios/` directory from scratch, which avoids duplicate widget-target configuration during repeated prebuilds.
+
 ## Install on a Physical iPhone
 
 Because this app includes a native widget extension, it must be installed as a native development build or release build. Expo Go is not enough.

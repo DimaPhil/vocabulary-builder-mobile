@@ -61,6 +61,7 @@ module.exports = ({ config }: { config: ExpoConfig }) =>
         "./plugins/with-ios-deployment-target",
         {
           deploymentTarget: "16.0",
+          disableUserScriptSandboxing: true,
         },
       ],
       [

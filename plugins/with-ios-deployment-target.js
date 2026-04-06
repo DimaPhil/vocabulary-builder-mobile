@@ -5,7 +5,7 @@ const path = require("path");
 const PODFILE_MARKER_START = "# >>> VocabularyBuilder deployment target override";
 const PODFILE_MARKER_END = "# <<< VocabularyBuilder deployment target override";
 
-function updateProjectDeploymentTarget(project, deploymentTarget) {
+function updateProjectBuildSettings(project, deploymentTarget, disableUserScriptSandboxing) {
   const configurations = project.pbxXCBuildConfigurationSection();
 
   for (const key of Object.keys(configurations)) {
@@ -21,25 +21,85 @@ function updateProjectDeploymentTarget(project, deploymentTarget) {
     }
 
     config.buildSettings.IPHONEOS_DEPLOYMENT_TARGET = deploymentTarget;
+
+    if (disableUserScriptSandboxing) {
+      config.buildSettings.ENABLE_USER_SCRIPT_SANDBOXING = "NO";
+    }
   }
 
   return project;
 }
 
-function injectPodfileOverride(contents, deploymentTarget) {
+function buildPodfileOverrideBlock(deploymentTarget, disableUserScriptSandboxing) {
   const overrideBlock = [
     PODFILE_MARKER_START,
     "    installer.generated_projects.each do |project|",
+    "      project.build_configurations.each do |config|",
+    `        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '${deploymentTarget}'`,
+  ];
+
+  if (disableUserScriptSandboxing) {
+    overrideBlock.push(
+      "        config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'"
+    );
+  }
+
+  overrideBlock.push(
+    "      end",
     "      project.targets.each do |target|",
     "        target.build_configurations.each do |config|",
-    `          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '${deploymentTarget}'`,
+    `          config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '${deploymentTarget}'`
+  );
+
+  if (disableUserScriptSandboxing) {
+    overrideBlock.push(
+      "          config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'"
+    );
+  }
+
+  overrideBlock.push(
     "        end",
     "      end",
     "      project.save",
     "    end",
-    PODFILE_MARKER_END,
-  ].join("\n");
+    "    installer.pods_project.build_configurations.each do |config|",
+    `      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '${deploymentTarget}'`
+  );
 
+  if (disableUserScriptSandboxing) {
+    overrideBlock.push(
+      "      config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'"
+    );
+  }
+
+  overrideBlock.push(
+    "    end",
+    "    installer.pods_project.targets.each do |target|",
+    "      target.build_configurations.each do |config|",
+    `        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '${deploymentTarget}'`
+  );
+
+  if (disableUserScriptSandboxing) {
+    overrideBlock.push(
+      "        config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'"
+    );
+  }
+
+  overrideBlock.push(
+    "      end",
+    "    end",
+    "    installer.pods_project.save",
+    PODFILE_MARKER_END
+  );
+
+  return overrideBlock.join("\n");
+}
+
+function injectPodfileOverride(contents, deploymentTarget, disableUserScriptSandboxing) {
+  const overrideBlock = buildPodfileOverrideBlock(
+    deploymentTarget,
+    disableUserScriptSandboxing
+  );
   const existingBlockPattern = new RegExp(
     `${PODFILE_MARKER_START}[\\s\\S]*?${PODFILE_MARKER_END}\\n?`,
     "g"
@@ -59,11 +119,15 @@ function injectPodfileOverride(contents, deploymentTarget) {
   )}`;
 }
 
-const withIosDeploymentTarget = (config, { deploymentTarget }) => {
+const withIosDeploymentTarget = (
+  config,
+  { deploymentTarget, disableUserScriptSandboxing = false }
+) => {
   config = withXcodeProject(config, (config) => {
-    config.modResults = updateProjectDeploymentTarget(
+    config.modResults = updateProjectBuildSettings(
       config.modResults,
-      deploymentTarget
+      deploymentTarget,
+      disableUserScriptSandboxing
     );
     return config;
   });
@@ -75,7 +139,8 @@ const withIosDeploymentTarget = (config, { deploymentTarget }) => {
       const existingContents = fs.readFileSync(podfilePath, "utf8");
       const updatedContents = injectPodfileOverride(
         existingContents,
-        deploymentTarget
+        deploymentTarget,
+        disableUserScriptSandboxing
       );
 
       if (updatedContents !== existingContents) {

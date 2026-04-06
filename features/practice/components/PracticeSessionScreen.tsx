@@ -1,6 +1,6 @@
 import { useAtomValue, useSetAtom } from "jotai";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image, Pressable, View } from "react-native";
 import Animated, {
   interpolate,
@@ -27,6 +27,16 @@ export function PracticeSessionScreen() {
   const { data: items = [] } = useVocabularyItemsQuery();
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
+  const advanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (advanceTimerRef.current) {
+        clearTimeout(advanceTimerRef.current);
+      }
+    };
+  }, []);
 
   function leaveSession(destination: "/" | "/practice") {
     setSession(null);
@@ -60,6 +70,20 @@ export function PracticeSessionScreen() {
 
   const currentCard = session.cards[index];
   const isFinished = index >= session.cards.length - 1;
+
+  function advanceToNextCard() {
+    if (advanceTimerRef.current) {
+      clearTimeout(advanceTimerRef.current);
+    }
+
+    setAdvancing(true);
+    setRevealed(false);
+    advanceTimerRef.current = setTimeout(() => {
+      setIndex((value) => value + 1);
+      setAdvancing(false);
+      advanceTimerRef.current = null;
+    }, 240);
+  }
 
   return (
     <Page>
@@ -131,14 +155,29 @@ export function PracticeSessionScreen() {
             </View>
           )
         }
+        disabled={advancing}
+        key={currentCard.id}
         revealed={revealed}
         onToggle={() => setRevealed((value) => !value)}
       />
 
       <View style={{ gap: 10 }}>
         <Button
-          label={revealed ? (isFinished ? "Finish session" : "Next card") : "Reveal answer"}
+          disabled={advancing}
+          label={
+            advancing
+              ? "Loading next card..."
+              : revealed
+                ? isFinished
+                  ? "Finish session"
+                  : "Next card"
+                : "Reveal answer"
+          }
           onPress={() => {
+            if (advancing) {
+              return;
+            }
+
             if (!revealed) {
               setRevealed(true);
               return;
@@ -149,23 +188,29 @@ export function PracticeSessionScreen() {
               return;
             }
 
-            setIndex((value) => value + 1);
-            setRevealed(false);
+            advanceToNextCard();
           }}
         />
         <Button
+          disabled={advancing}
           label="Reshuffle"
           variant="secondary"
           onPress={() => {
+            if (advanceTimerRef.current) {
+              clearTimeout(advanceTimerRef.current);
+              advanceTimerRef.current = null;
+            }
             setSession({
               cards: buildPracticeCards(items, session.config),
               config: session.config,
             });
             setIndex(0);
             setRevealed(false);
+            setAdvancing(false);
           }}
         />
         <Button
+          disabled={advancing}
           label="End session"
           variant="ghost"
           onPress={() => leaveSession("/practice")}
@@ -177,11 +222,13 @@ export function PracticeSessionScreen() {
 
 function FlipCard({
   backContent,
+  disabled = false,
   frontContent,
   revealed,
   onToggle,
 }: {
   backContent: React.ReactNode;
+  disabled?: boolean;
   frontContent: React.ReactNode;
   revealed: boolean;
   onToggle: () => void;
@@ -208,7 +255,7 @@ function FlipCard({
   }));
 
   return (
-    <Pressable onPress={onToggle}>
+    <Pressable disabled={disabled} onPress={onToggle}>
       <Animated.View style={containerStyle}>
         <Card style={{ minHeight: 320 }}>
           <Animated.View style={frontStyle}>{frontContent}</Animated.View>

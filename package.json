@@ -16,7 +16,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage --runInBand",
     "doctor": "expo doctor",
-    "prebuild:ios": "CI=1 expo prebuild --platform ios",
+    "prebuild:ios": "rm -rf ios && CI=1 expo prebuild --platform ios",
     "ci:check": "npm run lint && npm run typecheck && npm run test:coverage",
     "prepare": "husky"
   },
