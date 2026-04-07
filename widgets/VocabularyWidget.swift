@@ -6,6 +6,7 @@ private let snapshotFileName = "widget-snapshot.json"
 private let appLaunchURL = URL(string: "vocabularybuilder://widget")!
 private let widgetTextPrimary = Color(red: 0.12, green: 0.10, blue: 0.08)
 private let widgetTextSecondary = Color(red: 0.34, green: 0.27, blue: 0.19)
+private let timelineEntryCount = 24
 
 struct VocabularySnapshot: Decodable {
   let version: Int
@@ -42,14 +43,17 @@ struct VocabularyProvider: TimelineProvider {
 
   func getTimeline(in context: Context, completion: @escaping (Timeline<VocabularyEntry>) -> Void) {
     let now = Date()
-    let entry = makeEntry(for: now)
-    let nextRefresh = Calendar.current.date(
-      byAdding: .hour,
-      value: max(entry.rotationHours, 1),
-      to: now
-    ) ?? now.addingTimeInterval(Double(max(entry.rotationHours, 1)) * 3600)
+    guard let snapshot = readSnapshot() else {
+      let fallbackRefresh = Calendar.current.date(byAdding: .hour, value: 1, to: now)
+        ?? now.addingTimeInterval(3600)
+      completion(
+        Timeline(entries: [VocabularyEntry(date: now, item: nil, rotationHours: 1)], policy: .after(fallbackRefresh))
+      )
+      return
+    }
 
-    completion(Timeline(entries: [entry], policy: .after(nextRefresh)))
+    let entries = buildTimelineEntries(snapshot: snapshot, now: now)
+    completion(Timeline(entries: entries, policy: .atEnd))
   }
 
   private func makeEntry(for date: Date) -> VocabularyEntry {
@@ -107,6 +111,34 @@ struct VocabularyProvider: TimelineProvider {
     }
 
     return Int(hash)
+  }
+
+  private func buildTimelineEntries(snapshot: VocabularySnapshot, now: Date) -> [VocabularyEntry] {
+    let rotationHours = max(snapshot.rotationHours, 1)
+    let rotationInterval = TimeInterval(rotationHours * 3600)
+    let currentSlot = Int(now.timeIntervalSince1970 / rotationInterval)
+
+    var entries = [
+      VocabularyEntry(
+        date: now,
+        item: selectItem(snapshot: snapshot, date: now),
+        rotationHours: rotationHours
+      ),
+    ]
+
+    for offset in 1...timelineEntryCount {
+      let slotStart = TimeInterval(currentSlot + offset) * rotationInterval
+      let entryDate = Date(timeIntervalSince1970: slotStart)
+      entries.append(
+        VocabularyEntry(
+          date: entryDate,
+          item: selectItem(snapshot: snapshot, date: entryDate),
+          rotationHours: rotationHours
+        )
+      )
+    }
+
+    return entries
   }
 }
 

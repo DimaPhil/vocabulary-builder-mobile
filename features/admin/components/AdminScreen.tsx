@@ -17,6 +17,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { Chip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Page } from "@/components/ui/Page";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -83,6 +84,7 @@ const settingsFormSchema = z.object({
 type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 type ItemFormValues = z.infer<typeof itemFormSchema>;
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
+const ADMIN_ITEMS_PAGE_SIZE = 20;
 
 export function AdminScreen() {
   const theme = useAppTheme();
@@ -102,6 +104,9 @@ export function AdminScreen() {
   const [editingItem, setEditingItem] = useState<VocabularyItem | null>(null);
   const [showItemModal, setShowItemModal] = useState(false);
   const [itemSearch, setItemSearch] = useState("");
+  const [itemCategoryFilter, setItemCategoryFilter] = useState<number | "all">("all");
+  const [itemPage, setItemPage] = useState(0);
+  const [expandedItemId, setExpandedItemId] = useState<number | null>(null);
   const [importText, setImportText] = useState("");
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [autoFillImportImages, setAutoFillImportImages] = useState(true);
@@ -145,6 +150,12 @@ export function AdminScreen() {
 
   const filteredItems = items.filter((item) => {
     const query = deferredItemSearch.trim().toLowerCase();
+    const matchesCategory =
+      itemCategoryFilter === "all" || item.categoryId === itemCategoryFilter;
+
+    if (!matchesCategory) {
+      return false;
+    }
 
     if (!query) {
       return true;
@@ -156,6 +167,15 @@ export function AdminScreen() {
       (item.categoryName ?? "").toLowerCase().includes(query)
     );
   });
+  const totalItemPages = Math.max(
+    1,
+    Math.ceil(filteredItems.length / ADMIN_ITEMS_PAGE_SIZE)
+  );
+  const safeItemPage = Math.min(itemPage, totalItemPages - 1);
+  const paginatedItems = filteredItems.slice(
+    safeItemPage * ADMIN_ITEMS_PAGE_SIZE,
+    (safeItemPage + 1) * ADMIN_ITEMS_PAGE_SIZE
+  );
 
   async function handleCategorySubmit(values: CategoryFormValues) {
     const input = categoryInputSchema.parse(values);
@@ -590,53 +610,145 @@ export function AdminScreen() {
         <Text variant="heading">Vocabulary items</Text>
         <TextField
           label="Search items"
-          onChangeText={setItemSearch}
+          onChangeText={(value) => {
+            setItemSearch(value);
+            setItemPage(0);
+            setExpandedItemId(null);
+          }}
           placeholder="Search text or category"
           value={itemSearch}
         />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+          <Chip
+            active={itemCategoryFilter === "all"}
+            label={`All (${items.length})`}
+            onPress={() => {
+              setItemCategoryFilter("all");
+              setItemPage(0);
+              setExpandedItemId(null);
+            }}
+          />
+          {categories.map((category) => {
+            const count = items.filter((item) => item.categoryId === category.id).length;
+
+            return (
+              <Chip
+                key={category.id}
+                active={itemCategoryFilter === category.id}
+                label={`${category.name} (${count})`}
+                onPress={() => {
+                  setItemCategoryFilter(category.id);
+                  setItemPage(0);
+                  setExpandedItemId(null);
+                }}
+              />
+            );
+          })}
+        </View>
+        <Text color={theme.colors.textMuted} variant="caption">
+          Showing {paginatedItems.length ? safeItemPage * ADMIN_ITEMS_PAGE_SIZE + 1 : 0}
+          {paginatedItems.length
+            ? `-${safeItemPage * ADMIN_ITEMS_PAGE_SIZE + paginatedItems.length}`
+            : ""}{" "}
+          of {filteredItems.length} item(s)
+        </Text>
         <Button label="Add item" onPress={openCreateItemModal} />
         {filteredItems.length ? (
           <View style={{ gap: 10 }}>
-            {filteredItems.map((item) => (
-              <Card key={item.id} style={{ padding: 14 }}>
-                <Text variant="heading">{item.sourceText}</Text>
-                <Text>{item.targetText}</Text>
-                <Text color={theme.colors.textMuted} variant="caption">
-                  {item.categoryName}
-                </Text>
-                {item.imageUri ? (
-                  <Image
-                    source={{ uri: item.imageUri }}
-                    style={{
-                      borderRadius: 18,
-                      height: 120,
-                      width: "100%",
-                    }}
-                  />
-                ) : null}
-                <View style={{ flexDirection: "row", gap: 10 }}>
+            {paginatedItems.map((item) => {
+              const expanded = expandedItemId === item.id;
+
+              return (
+                <Card key={item.id} style={{ padding: 14 }}>
+                  <View style={{ gap: 6 }}>
+                    <Text variant="heading">{item.sourceText}</Text>
+                    <Text numberOfLines={expanded ? undefined : 1}>{item.targetText}</Text>
+                    <Text color={theme.colors.textMuted} variant="caption">
+                      {item.categoryName} • {item.sourceLanguage} → {item.targetLanguage}
+                    </Text>
+                  </View>
+
+                  {expanded ? (
+                    <>
+                      {item.examples.length ? (
+                        <Text color={theme.colors.textMuted}>
+                          Examples: {item.examples.join(" • ")}
+                        </Text>
+                      ) : null}
+                      {item.synonyms.length ? (
+                        <Text color={theme.colors.textMuted}>
+                          Synonyms: {item.synonyms.join(", ")}
+                        </Text>
+                      ) : null}
+                      {item.imageUri ? (
+                        <Image
+                          source={{ uri: item.imageUri }}
+                          style={{
+                            borderRadius: 18,
+                            height: 120,
+                            width: "100%",
+                          }}
+                        />
+                      ) : null}
+                    </>
+                  ) : null}
+
+                  <View style={{ flexDirection: "row", gap: 10 }}>
+                    <Button
+                      label={expanded ? "Collapse" : "Details"}
+                      onPress={() =>
+                        setExpandedItemId((current) => (current === item.id ? null : item.id))
+                      }
+                      variant="secondary"
+                    />
+                    <Button
+                      label="Edit"
+                      onPress={() => openEditItemModal(item)}
+                      variant="secondary"
+                    />
+                    <Button
+                      label="Delete"
+                      onPress={() =>
+                        Alert.alert("Delete item", "This item will be removed.", [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () => deleteItemMutation.mutate(item.id),
+                          },
+                        ])
+                      }
+                      variant="danger"
+                    />
+                  </View>
+                </Card>
+              );
+            })}
+            {totalItemPages > 1 ? (
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <View style={{ flex: 1 }}>
                   <Button
-                    label="Edit"
-                    onPress={() => openEditItemModal(item)}
+                    disabled={safeItemPage === 0}
+                    label="Previous page"
+                    onPress={() => {
+                      setExpandedItemId(null);
+                      setItemPage((value) => Math.max(0, value - 1));
+                    }}
                     variant="secondary"
                   />
+                </View>
+                <View style={{ flex: 1 }}>
                   <Button
-                    label="Delete"
-                    onPress={() =>
-                      Alert.alert("Delete item", "This item will be removed.", [
-                        { text: "Cancel", style: "cancel" },
-                        {
-                          text: "Delete",
-                          style: "destructive",
-                          onPress: () => deleteItemMutation.mutate(item.id),
-                        },
-                      ])
-                    }
-                    variant="danger"
+                    disabled={safeItemPage >= totalItemPages - 1}
+                    label={`Next page (${safeItemPage + 1}/${totalItemPages})`}
+                    onPress={() => {
+                      setExpandedItemId(null);
+                      setItemPage((value) => Math.min(totalItemPages - 1, value + 1));
+                    }}
                   />
                 </View>
-              </Card>
-            ))}
+              </View>
+            ) : null}
           </View>
         ) : (
           <EmptyState
