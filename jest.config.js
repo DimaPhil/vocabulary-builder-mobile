@@ -6,6 +6,8 @@ module.exports = {
   collectCoverageFrom: [
     "features/admin/schemas/import.ts",
     "features/practice/schemas/session.ts",
+    "features/practice/services/exampleMasking/index.ts",
+    "features/practice/services/exampleMasking/normalization.ts",
     "lib/db/schemas.ts",
     "lib/utils/random.ts",
     "lib/utils/strings.ts",

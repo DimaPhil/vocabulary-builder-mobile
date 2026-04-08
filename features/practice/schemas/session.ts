@@ -1,15 +1,6 @@
 import type { PracticeCard, PracticeSessionConfig, VocabularyItem } from "@/lib/types";
+import { maskExampleAnswer } from "@/features/practice/services/exampleMasking";
 import { shuffleArray } from "@/lib/utils/random";
-import { escapeRegExp } from "@/lib/utils/strings";
-
-export function maskExampleAnswer(example: string, answer: string) {
-  if (!answer.trim()) {
-    return example;
-  }
-
-  const pattern = new RegExp(escapeRegExp(answer), "gi");
-  return example.replace(pattern, "____");
-}
 
 export function buildPracticeCards(
   items: VocabularyItem[],

@@ -53,6 +53,7 @@
     "react-native-web": "~0.21.0",
     "react-native-widget-extension": "^0.2.0",
     "react-native-worklets": "0.5.1",
+    "wink-lemmatizer": "^3.0.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {
