@@ -557,37 +557,56 @@ export function AdminScreen() {
                     <Button
                       label="Delete"
                       onPress={() => {
-                        if (
-                          usageCount > 0 &&
-                          categories.filter((item) => item.id !== category.id).length === 0
-                        ) {
-                          Alert.alert(
-                            "Cannot delete category",
-                            "Create another category first so existing items can be reassigned."
-                          );
-                          return;
-                        }
-
                         const fallbackCategoryId =
                           categories.find((item) => item.id !== category.id)?.id;
 
                         Alert.alert(
                           "Delete category",
                           usageCount > 0
-                            ? "Items in this category will be reassigned before deletion."
+                            ? fallbackCategoryId
+                              ? "Choose whether to reassign the items to another category or remove everything in this category."
+                              : "This is the last category. Deleting it will also remove all items inside it."
                             : "This category will be deleted.",
                           [
                             { text: "Cancel", style: "cancel" },
-                            {
-                              text: "Delete",
-                              style: "destructive",
-                              onPress: () =>
-                                deleteCategoryMutation.mutate({
-                                  categoryId: category.id,
-                                  reassignToCategoryId:
-                                    usageCount > 0 ? fallbackCategoryId : undefined,
-                                }),
-                            },
+                            ...(usageCount > 0
+                              ? [
+                                  ...(fallbackCategoryId
+                                    ? [
+                                        {
+                                          text: "Reassign items",
+                                          onPress: () =>
+                                            deleteCategoryMutation.mutate({
+                                              categoryId: category.id,
+                                              options: {
+                                                reassignToCategoryId: fallbackCategoryId,
+                                              },
+                                            }),
+                                        },
+                                      ]
+                                    : []),
+                                  {
+                                    text: "Delete category + items",
+                                    style: "destructive" as const,
+                                    onPress: () =>
+                                      deleteCategoryMutation.mutate({
+                                        categoryId: category.id,
+                                        options: {
+                                          deleteItems: true,
+                                        },
+                                      }),
+                                  },
+                                ]
+                              : [
+                                  {
+                                    text: "Delete",
+                                    style: "destructive" as const,
+                                    onPress: () =>
+                                      deleteCategoryMutation.mutate({
+                                        categoryId: category.id,
+                                      }),
+                                  },
+                                ]),
                           ]
                         );
                       }}

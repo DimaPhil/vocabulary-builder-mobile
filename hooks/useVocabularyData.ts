@@ -111,12 +111,15 @@ export function useDeleteCategoryMutation() {
   return useMutation({
     mutationFn: async ({
       categoryId,
-      reassignToCategoryId,
+      options,
     }: {
       categoryId: number;
-      reassignToCategoryId?: number;
+      options?: {
+        reassignToCategoryId?: number;
+        deleteItems?: boolean;
+      };
     }) => {
-      await deleteCategory(db, categoryId, reassignToCategoryId);
+      await deleteCategory(db, categoryId, options);
       await syncWidgetSnapshot(db);
     },
     onSuccess: invalidate,

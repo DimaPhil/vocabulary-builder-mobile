@@ -75,16 +75,27 @@ export async function getCategoryUsage(
 export async function deleteCategory(
   db: SQLiteDatabase,
   categoryId: number,
-  reassignToCategoryId?: number
+  options?: {
+    reassignToCategoryId?: number;
+    deleteItems?: boolean;
+  }
 ) {
-  if (reassignToCategoryId) {
+  if (options?.deleteItems) {
+    await db.runAsync(
+      `
+        DELETE FROM vocabulary_items
+        WHERE category_id = ?
+      `,
+      categoryId
+    );
+  } else if (options?.reassignToCategoryId) {
     await db.runAsync(
       `
         UPDATE vocabulary_items
         SET category_id = ?, updated_at = ?
         WHERE category_id = ?
       `,
-      reassignToCategoryId,
+      options.reassignToCategoryId,
       isoNow(),
       categoryId
     );
